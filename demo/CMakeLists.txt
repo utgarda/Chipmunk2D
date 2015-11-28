@@ -15,6 +15,8 @@ else(APPLE)
 	FIND_LIBRARY(GLEW_LIBRARIES GLEW /usr/lib)
 endif(APPLE)
 
+set(GLFW_INCLUDE_DIR /usr/include/GLFW)
+
 set(chipmunk_demos_include_dirs
   ${chipmunk_SOURCE_DIR}/include
   ${GLFW_INCLUDE_DIR}

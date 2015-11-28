@@ -37,7 +37,7 @@
 #include <stdarg.h>
 
 #include "GL/glew.h"
-#include "GL/glfw.h"
+#include "glfw3.h"
 
 #include "chipmunk/chipmunk_private.h"
 #include "ChipmunkDemo.h"
@@ -73,6 +73,8 @@ cpShapeFilter NOT_GRABBABLE_FILTER = {CP_NO_GROUP, ~GRABBABLE_MASK_BIT, ~GRABBAB
 
 cpVect translate = {0, 0};
 cpFloat scale = 1.0;
+
+GLFWwindow* window = NULL;
 
 static void ShapeFreeWrap(cpSpace *space, cpShape *shape, void *unused){
 	cpSpaceRemoveShape(space, shape);
@@ -354,12 +356,12 @@ Display(void)
 		ChipmunkDemoTextPopRenderer();
 	} glPopMatrix();
 	
-	glfwSwapBuffers();
+	glfwSwapBuffers(window);
 	glClear(GL_COLOR_BUFFER_BIT);
 }
 
 static void
-Reshape(int width, int height)
+Reshape(GLFWwindow* window, int width, int height)
 {
 	glViewport(0, 0, width, height);
 	
@@ -403,13 +405,13 @@ RunDemo(int index)
 	max_constraints = 0;
 	space = demos[demo_index].initFunc();
 
-	glfwSetWindowTitle(DemoTitle(index));
+	glfwSetWindowTitle(window, DemoTitle(index));
 }
 
 static void
-Keyboard(int key, int state)
+Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-	if(state == GLFW_RELEASE) return;
+	if(action == GLFW_RELEASE) return;
 	
 	int index = key - 'a';
 	
@@ -450,7 +452,7 @@ Keyboard(int key, int state)
 }
 
 static cpVect
-MouseToSpace(int x, int y)
+MouseToSpace(double x, double y)
 {
 	GLdouble model[16];
 	glGetDoublev(GL_MODELVIEW_MATRIX, model);
@@ -462,7 +464,7 @@ MouseToSpace(int x, int y)
 	glGetIntegerv(GL_VIEWPORT, view);
 	
 	int ww, wh;
-	glfwGetWindowSize(&ww, &wh);
+ 	glfwGetWindowSize(window, &ww, &wh);
 	
 	GLdouble mx, my, mz;
 	gluUnProject(x, wh - y, 0.0f, model, proj, view, &mx, &my, &mz);
@@ -471,16 +473,16 @@ MouseToSpace(int x, int y)
 }
 
 static void
-Mouse(int x, int y)
+Mouse(GLFWwindow* window, double x, double y)
 {
 	ChipmunkDemoMouse = MouseToSpace(x, y);
 }
 
 static void
-Click(int button, int state)
+Click(GLFWwindow* window, int button, int action, int mods)
 {
 	if(button == GLFW_MOUSE_BUTTON_1){
-		if(state == GLFW_PRESS){
+		if(action == GLFW_PRESS){
 			// give the mouse click a little radius to make it easier to click small shapes.
 			cpFloat radius = 5.0;
 			
@@ -503,29 +505,27 @@ Click(int button, int state)
 			mouse_joint = NULL;
 		}
 	} else if(button == GLFW_MOUSE_BUTTON_2){
-		ChipmunkDemoRightDown = ChipmunkDemoRightClick = (state == GLFW_PRESS);
+		ChipmunkDemoRightDown = ChipmunkDemoRightClick = (action == GLFW_PRESS);
 	}
 }
+
+// static void
+// SpecialKeyboard(int key, int state)
+// {
+// 	switch(key){
+// 		case GLFW_KEY_UP   : ChipmunkDemoKeyboard.y += (state == GLFW_PRESS ?  1.0 : -1.0); break;
+// 		case GLFW_KEY_DOWN : ChipmunkDemoKeyboard.y += (state == GLFW_PRESS ? -1.0 :  1.0); break;
+// 		case GLFW_KEY_RIGHT: ChipmunkDemoKeyboard.x += (state == GLFW_PRESS ?  1.0 : -1.0); break;
+// 		case GLFW_KEY_LEFT : ChipmunkDemoKeyboard.x += (state == GLFW_PRESS ? -1.0 :  1.0); break;
+// 		default: break;
+// 	}
+// }
 
 static void
-SpecialKeyboard(int key, int state)
-{
-	switch(key){
-		case GLFW_KEY_UP   : ChipmunkDemoKeyboard.y += (state == GLFW_PRESS ?  1.0 : -1.0); break;
-		case GLFW_KEY_DOWN : ChipmunkDemoKeyboard.y += (state == GLFW_PRESS ? -1.0 :  1.0); break;
-		case GLFW_KEY_RIGHT: ChipmunkDemoKeyboard.x += (state == GLFW_PRESS ?  1.0 : -1.0); break;
-		case GLFW_KEY_LEFT : ChipmunkDemoKeyboard.x += (state == GLFW_PRESS ? -1.0 :  1.0); break;
-		default: break;
-	}
-}
-
-static int
-WindowClose()
+WindowClose(GLFWwindow* window)
 {
 	glfwTerminate();
 	exit(EXIT_SUCCESS);
-	
-	return GL_TRUE;
 }
 
 static void
@@ -534,7 +534,7 @@ SetupGL(void)
 	glewExperimental = GL_TRUE;
 	cpAssertHard(glewInit() == GLEW_NO_ERROR, "There was an error initializing GLEW.");
 	cpAssertHard(GLEW_ARB_vertex_array_object, "Requires VAO support.");
-	
+
 	ChipmunkDebugDrawInit();
 	ChipmunkDemoTextInit();
 	
@@ -556,20 +556,23 @@ SetupGLFW()
 {
 	cpAssertHard(glfwInit(), "Error initializing GLFW.");
 	
-	cpAssertHard(glfwOpenWindow(640, 480, 8, 8, 8, 8, 0, 0, GLFW_WINDOW), "Error opening GLFW window.");
-	glfwSetWindowTitle(DemoTitle(demo_index));
+	window = glfwCreateWindow(640, 480, DemoTitle(demo_index), NULL, NULL);
+
+	cpAssertHard(window, "Error opening GLFW window.");
+	glfwMakeContextCurrent(window);
+	//glfwSetWindowTitle(window, DemoTitle(demo_index));
 	glfwSwapInterval(1);
 	
 	SetupGL();
+
+	glfwSetWindowSizeCallback(window, Reshape);
+	glfwSetWindowCloseCallback(window, WindowClose);
 	
-	glfwSetWindowSizeCallback(Reshape);
-	glfwSetWindowCloseCallback(WindowClose);
+	glfwSetKeyCallback(window, Keyboard);
+// 	glfwSetKeyCallback(SpecialKeyboard);
 	
-	glfwSetCharCallback(Keyboard);
-	glfwSetKeyCallback(SpecialKeyboard);
-	
-	glfwSetMousePosCallback(Mouse);
-	glfwSetMouseButtonCallback(Click);
+	glfwSetCursorPosCallback(window, Mouse);
+	glfwSetMouseButtonCallback(window, Click);
 }
 
 static void
@@ -672,6 +675,7 @@ main(int argc, const char **argv)
 	} else {
 		mouse_body = cpBodyNewKinematic();
 		
+		printf("before RunDemo\n");
 		RunDemo(demo_index);
 		SetupGLFW();
 		
